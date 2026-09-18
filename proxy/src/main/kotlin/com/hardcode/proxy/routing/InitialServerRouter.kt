@@ -20,7 +20,7 @@ class InitialServerRouter(
 ) {
     @Subscribe
     fun onChooseInitialServer(event: PlayerChooseInitialServerEvent) {
-        val targetName = if (routingState.pendingRerollRunId != null) "limbo" else "game"
+        val targetName = if (routingState.isRerollPending) "limbo" else "game"
         val target = proxyServer.getServer(targetName).orElse(null)
         if (target == null) {
             logger.warn("No '{}' server registered - falling back to Velocity's own default", targetName)
