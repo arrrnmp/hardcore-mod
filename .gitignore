@@ -16,6 +16,10 @@ out/
 /limbo-server/run/
 /runs/
 
+# Manual local playtest environment (real standalone Fabric servers, downloaded
+# vanilla/loader/mod jars, world saves) - see local-test/README.md
+/local-test/
+
 # Logs / local config
 *.log
 .env
