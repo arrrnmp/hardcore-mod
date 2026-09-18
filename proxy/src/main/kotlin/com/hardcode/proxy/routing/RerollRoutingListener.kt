@@ -40,14 +40,29 @@ class RerollRoutingListener(
     private fun onRerollRequested(event: RedisEvent.RerollRequested) {
         val yesVoters = event.yesVoterUuids.mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }.toSet()
         routingState.onRerollRequested(event.newRunId, yesVoters)
-        logger.info("Reroll requested: {} -> {} ({} yes voters) - moving them to limbo", event.previousRunId, event.newRunId, yesVoters.size)
 
         val limbo = proxyServer.getServer("limbo").orElse(null)
+        val game = proxyServer.getServer("game").orElse(null)
         if (limbo == null) {
-            logger.warn("No 'limbo' server registered - can't move yes voters there")
+            logger.warn("No 'limbo' server registered - can't move anyone there")
             return
         }
-        for (uuid in yesVoters) {
+
+        // Everyone currently on "game" moves to Limbo, not just yes-voters - the server is
+        // about to halt either way (confirmed by real testing: a dead player who couldn't
+        // vote, and so was never a yes-voter, got hard-kicked off the whole proxy with
+        // nowhere to go once the game server actually stopped). Only yes-voters get
+        // automatically carried into the new run once it's ready, in onRerollReady below;
+        // everyone else just waits in Limbo.
+        val toMove = game?.playersConnected?.map { it.uniqueId }?.toSet() ?: yesVoters
+        logger.info(
+            "Reroll requested: {} -> {} - moving {} connected players to limbo ({} of them yes-voters)",
+            event.previousRunId,
+            event.newRunId,
+            toMove.size,
+            yesVoters.size,
+        )
+        for (uuid in toMove) {
             proxyServer.getPlayer(uuid).ifPresent { it.createConnectionRequest(limbo).fireAndForget() }
         }
     }
