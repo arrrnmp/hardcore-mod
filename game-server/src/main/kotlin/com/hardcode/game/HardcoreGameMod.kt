@@ -1,5 +1,6 @@
 package com.hardcode.game
 
+import com.hardcode.common.model.RunState
 import com.hardcode.common.redis.RedisConnection
 import com.hardcode.common.redis.RedisEvent
 import com.hardcode.common.redis.RedisEventBus
@@ -20,6 +21,7 @@ import com.hardcode.game.run.VoteManager
 import com.hardcode.game.stats.StatsBroadcaster
 import com.hardcode.game.stats.StatsSnapshotPayload
 import com.hardcode.game.storage.HallOfShame
+import com.hardcode.game.storage.HallOfShamePayload
 import com.hardcode.game.tablist.HealthTabList
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
@@ -29,6 +31,7 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.fabricmc.loader.api.FabricLoader
+import net.minecraft.world.level.GameType
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 
@@ -51,8 +54,9 @@ object HardcoreGameMod : ModInitializer {
 
     lateinit var adminService: AdminService
         private set
+    lateinit var hallOfShame: HallOfShame
+        private set
 
-    private lateinit var hallOfShame: HallOfShame
     private lateinit var freezeManager: FreezeManager
     private lateinit var statsBroadcaster: StatsBroadcaster
     private var database: Database? = null
@@ -66,6 +70,7 @@ object HardcoreGameMod : ModInitializer {
         PayloadTypeRegistry.serverboundPlay().register(AdminActionPayload.TYPE, AdminActionPayload.CODEC)
         PayloadTypeRegistry.clientboundPlay().register(DeathFlashPayload.TYPE, DeathFlashPayload.CODEC)
         PayloadTypeRegistry.clientboundPlay().register(StatsSnapshotPayload.TYPE, StatsSnapshotPayload.CODEC)
+        PayloadTypeRegistry.clientboundPlay().register(HallOfShamePayload.TYPE, HallOfShamePayload.CODEC)
 
         redis = runCatching { RedisEventBus(RedisConnection.fromEnv()) }
             .onFailure { logger.warn("Could not set up Redis client, reroll hand-off will be disabled: {}", it.message) }
@@ -87,6 +92,7 @@ object HardcoreGameMod : ModInitializer {
             voteManager = VoteManager(server, runManager, rerollCoordinator, configManager)
             DeathHandler(server, runManager, voteManager, hallOfShame, configManager).register()
             freezeManager = FreezeManager(server, runManager, redis)
+            freezeManager.registerEnforcement()
             statsBroadcaster = StatsBroadcaster(server, runManager)
             adminService = AdminService(
                 server,
@@ -132,6 +138,13 @@ object HardcoreGameMod : ModInitializer {
             )
             freezeManager.onReconnect(player.getUUID())
             freezeManager.syncStateTo(player)
+
+            // The run is over the moment someone's died, regardless of vote outcome - a
+            // late joiner (or a "no" voter who never left) must not get to play survival on
+            // a run that's already decided it's done.
+            if (runManager.state == RunState.VOTE_PENDING || runManager.state == RunState.RUN_ENDED) {
+                player.setGameMode(GameType.SPECTATOR)
+            }
         }
 
         ServerPlayConnectionEvents.DISCONNECT.register { handler, _ ->
@@ -146,6 +159,7 @@ object HardcoreGameMod : ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register {
             if (::voteManager.isInitialized) voteManager.tick()
             if (::statsBroadcaster.isInitialized) statsBroadcaster.tick()
+            if (::freezeManager.isInitialized) freezeManager.tick()
         }
 
         // This can fire before SERVER_STARTING above, so HardcoreCommands must resolve

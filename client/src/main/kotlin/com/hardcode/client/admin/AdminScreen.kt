@@ -1,23 +1,23 @@
 package com.hardcode.client.admin
 
+import com.hardcode.client.ui.LeaderboardRenderer
+import com.hardcode.client.ui.PanelButton
 import com.hardcode.common.model.AdminAction
 import com.hardcode.common.model.AdminActionType
 import com.hardcode.common.model.AdminSnapshot
+import kotlinx.serialization.json.Json
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
-import net.minecraft.client.gui.components.Button
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 import net.minecraft.util.CommonColors
-import kotlinx.serialization.json.Json
 
 /**
- * The in-game admin panel: a real custom-rendered [Screen] (own layout, no chest-inventory
- * texture reuse), gated server-side on operator status for every action - this screen only
- * ever exists because the server already checked that before sending the first snapshot
- * (see AdminService.isAuthorized / the `/hardcore admin` command).
- *
- * Deliberately simple widget-wise for Phase 5 (buttons + drawn text, no scroll widgets) -
- * the roster/leaderboard lists are short enough in practice that this is plenty readable.
+ * The in-game admin panel: a real custom-rendered [Screen] with its own widgets
+ * ([PanelButton], not vanilla button sprites) - gated server-side on operator status for
+ * every action, this screen only ever exists because the server already checked that
+ * before sending the first snapshot (see AdminService.isAuthorized / the `/hardcore admin`
+ * command).
  */
 class AdminScreen(private var snapshot: AdminSnapshot) : Screen(Component.literal("Hardcore Admin")) {
     private enum class Tab(val label: String) {
@@ -30,11 +30,14 @@ class AdminScreen(private var snapshot: AdminSnapshot) : Screen(Component.litera
     private var tab: Tab = Tab.RUN_CONTROL
 
     companion object {
-        private const val PANEL_BG_ARGB = 0xE0101018.toInt()
-        private const val HEADER_BG_ARGB = 0xF0201028.toInt()
-        private const val TOP = 20
+        private const val BG_TOP_ARGB = 0xF0140A20.toInt()
+        private const val BG_BOTTOM_ARGB = 0xF00A0614.toInt()
+        private const val HEADER_ACCENT = 0xFF8A5CE0.toInt()
+        private const val CARD_BG = 0x40FFFFFF
+        private const val TOP = 34
         private const val LEFT = 20
-        private const val ROW_HEIGHT = 22
+        private const val ROW_HEIGHT = 24
+        private const val TAB_WIDTH = 118
     }
 
     fun updateSnapshot(newSnapshot: AdminSnapshot) {
@@ -52,11 +55,11 @@ class AdminScreen(private var snapshot: AdminSnapshot) : Screen(Component.litera
         var x = LEFT
         for (candidate in Tab.entries) {
             addRenderableWidget(
-                Button.builder(Component.literal(candidate.label)) { switchTab(candidate) }
-                    .bounds(x, TOP, 110, 20)
-                    .build(),
+                PanelButton(x, TOP, TAB_WIDTH, 22, Component.literal(candidate.label), highlighted = candidate == tab) {
+                    switchTab(candidate)
+                },
             )
-            x += 114
+            x += TAB_WIDTH + 4
         }
 
         when (tab) {
@@ -73,63 +76,63 @@ class AdminScreen(private var snapshot: AdminSnapshot) : Screen(Component.litera
     }
 
     private fun initRunControl() {
-        var y = TOP + 40
+        var y = TOP + 50
         addRenderableWidget(
-            Button.builder(Component.literal("Force Vote")) {
+            PanelButton(LEFT, y, 160, 22, Component.literal("Force Vote")) {
                 sendAction(AdminAction(AdminActionType.FORCE_VOTE.name))
-            }.bounds(LEFT, y, 150, 20).build(),
+            },
         )
         y += ROW_HEIGHT
 
         val freezeLabel = if (snapshot.frozen) "Force Unfreeze" else "Force Freeze"
         addRenderableWidget(
-            Button.builder(Component.literal(freezeLabel)) {
+            PanelButton(LEFT, y, 160, 22, Component.literal(freezeLabel)) {
                 val type = if (snapshot.frozen) AdminActionType.FORCE_UNFREEZE else AdminActionType.FORCE_FREEZE
                 sendAction(AdminAction(type.name))
-            }.bounds(LEFT, y, 150, 20).build(),
+            },
         )
         y += ROW_HEIGHT
 
         addRenderableWidget(
-            Button.builder(Component.literal("Force Re-roll")) {
+            PanelButton(LEFT, y, 160, 22, Component.literal("Force Re-roll")) {
                 sendAction(AdminAction(AdminActionType.FORCE_REROLL.name))
-            }.bounds(LEFT, y, 150, 20).build(),
+            },
         )
     }
 
     private fun initPlayers() {
-        var y = TOP + 40
+        var y = TOP + 50
         for (entry in snapshot.roster) {
             addRenderableWidget(
-                Button.builder(Component.literal("Kick")) {
+                PanelButton(LEFT + 300, y, 64, 20, Component.literal("Kick")) {
                     sendAction(AdminAction(AdminActionType.KICK_PLAYER.name, targetUuid = entry.uuid))
-                }.bounds(LEFT + 280, y, 60, 18).build(),
+                },
             )
             y += ROW_HEIGHT
         }
     }
 
     private fun initConfig() {
-        val y = TOP + 40
+        val y = TOP + 50
         addRenderableWidget(
-            Button.builder(Component.literal("-10s")) {
+            PanelButton(LEFT, y, 50, 22, Component.literal("-10s")) {
                 sendAction(
                     AdminAction(
                         AdminActionType.UPDATE_CONFIG.name,
                         voteDurationSeconds = snapshot.voteDurationSeconds - 10,
                     ),
                 )
-            }.bounds(LEFT, y, 60, 20).build(),
+            },
         )
         addRenderableWidget(
-            Button.builder(Component.literal("+10s")) {
+            PanelButton(LEFT + 190, y, 50, 22, Component.literal("+10s")) {
                 sendAction(
                     AdminAction(
                         AdminActionType.UPDATE_CONFIG.name,
                         voteDurationSeconds = snapshot.voteDurationSeconds + 10,
                     ),
                 )
-            }.bounds(LEFT + 160, y, 60, 20).build(),
+            },
         )
     }
 
@@ -137,48 +140,49 @@ class AdminScreen(private var snapshot: AdminSnapshot) : Screen(Component.litera
         ClientPlayNetworking.send(AdminActionPayload(Json.encodeToString(action)))
     }
 
-    override fun extractRenderState(graphics: net.minecraft.client.gui.GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
-        graphics.fill(0, 0, graphics.guiWidth(), graphics.guiHeight(), PANEL_BG_ARGB)
-        graphics.fill(0, 0, graphics.guiWidth(), TOP + 40, HEADER_BG_ARGB)
-        graphics.text(font, "Hardcore Admin - ${tab.label}", LEFT, 6, CommonColors.WHITE)
+    override fun extractRenderState(graphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
+        graphics.fillGradient(0, 0, graphics.guiWidth(), graphics.guiHeight(), BG_TOP_ARGB, BG_BOTTOM_ARGB)
+        graphics.fill(0, 0, graphics.guiWidth(), 28, HEADER_ACCENT)
+        graphics.text(font, "HARDCORE ADMIN", LEFT, 10, CommonColors.WHITE)
 
-        var y = TOP + 40
+        val y0 = TOP + 50
         when (tab) {
             Tab.RUN_CONTROL -> {
-                graphics.text(font, "Run: ${snapshot.runId.take(8)}", LEFT + 170, y, CommonColors.LIGHT_GRAY)
-                graphics.text(font, "State: ${snapshot.state}", LEFT + 170, y + 12, CommonColors.LIGHT_GRAY)
+                val cardX = LEFT + 180
+                graphics.fill(cardX, y0, cardX + 220, y0 + 70, CARD_BG)
+                graphics.text(font, "Run ${snapshot.runId.take(8)}", cardX + 8, y0 + 8, CommonColors.LIGHT_GRAY)
+                graphics.text(font, "State: ${snapshot.state}", cardX + 8, y0 + 22, CommonColors.LIGHT_GRAY)
                 graphics.text(
                     font,
                     if (snapshot.frozen) "FROZEN - waiting for ${snapshot.waitingForPlayerName}" else "Not frozen",
-                    LEFT + 170,
-                    y + 24,
-                    if (snapshot.frozen) CommonColors.RED else CommonColors.GREEN,
+                    cardX + 8,
+                    y0 + 40,
+                    if (snapshot.frozen) CommonColors.SOFT_RED else CommonColors.GREEN,
                 )
             }
             Tab.PLAYERS -> {
-                for (entry in snapshot.roster) {
+                var y = y0
+                for ((index, entry) in snapshot.roster.withIndex()) {
+                    if (index % 2 == 0) graphics.fill(LEFT, y - 2, LEFT + 360, y + 18, CARD_BG)
+                    val statusColor = if (entry.dead) CommonColors.SOFT_RED else if (entry.online) CommonColors.GREEN else CommonColors.LIGHT_GRAY
                     val status = buildString {
                         append(if (entry.online) "online" else "offline")
                         if (entry.dead) append(", dead")
                     }
-                    graphics.text(font, "${entry.name} ($status)", LEFT, y + 5, CommonColors.WHITE)
+                    graphics.text(font, entry.name, LEFT + 6, y + 2, CommonColors.WHITE)
+                    graphics.text(font, status, LEFT + 150, y + 2, statusColor)
                     y += ROW_HEIGHT
                 }
                 if (snapshot.roster.isEmpty()) {
-                    graphics.text(font, "No one has joined this run yet.", LEFT, y + 5, CommonColors.LIGHT_GRAY)
+                    graphics.text(font, "No one has joined this run yet.", LEFT, y0 + 2, CommonColors.LIGHT_GRAY)
                 }
             }
             Tab.HALL_OF_SHAME -> {
-                if (snapshot.leaderboard.isEmpty()) {
-                    graphics.text(font, "No deaths recorded yet.", LEFT, y + 5, CommonColors.LIGHT_GRAY)
-                }
-                for ((index, entry) in snapshot.leaderboard.withIndex()) {
-                    graphics.text(font, "${index + 1}. ${entry.name} - ${entry.deaths} deaths", LEFT, y + 5, CommonColors.WHITE)
-                    y += ROW_HEIGHT
-                }
+                graphics.fill(LEFT, y0, LEFT + 360, y0 + 20 + snapshot.leaderboard.size * 18, CARD_BG)
+                LeaderboardRenderer.render(graphics, font, snapshot.leaderboard, LEFT, y0 + 2, 360)
             }
             Tab.CONFIG -> {
-                graphics.text(font, "Vote duration: ${snapshot.voteDurationSeconds}s", LEFT + 70, y + 5, CommonColors.WHITE)
+                graphics.text(font, "Vote duration: ${snapshot.voteDurationSeconds}s", LEFT + 60, y0 + 6, CommonColors.WHITE)
             }
         }
 

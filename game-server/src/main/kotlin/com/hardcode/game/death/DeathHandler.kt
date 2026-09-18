@@ -7,6 +7,7 @@ import com.hardcode.game.run.RunManager
 import com.hardcode.game.run.VoteManager
 import com.hardcode.game.storage.HallOfShame
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
+import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.core.Holder
 import net.minecraft.network.chat.Component
@@ -18,12 +19,18 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.sounds.SoundEvents
 import net.minecraft.sounds.SoundSource
 import net.minecraft.world.level.GameType
-import java.util.UUID
 
 /**
  * Wires the death → drama → mass-spectator → vote flow together: a custom (admin-templated)
  * title, vanilla's own richer contextual death message as the subtitle, a red screen flash,
  * an ominous sound cue, and a global chat announcement - see the project plan, section 6.
+ *
+ * The game server should be run with `hardcore=true` in server.properties, which makes
+ * vanilla itself force a dead player to spectator on respawn - but [ServerPlayerEvents.AFTER_RESPAWN]
+ * below re-asserts spectator regardless, since relying solely on that flag isn't robust (an
+ * admin could misconfigure it, and it doesn't cover every respawn path). Once someone has
+ * died, this run is over for good: a vote only ever decides *when* to re-roll, never whether
+ * to keep playing this world - see [RunState.RUN_ENDED].
  */
 class DeathHandler(
     private val server: MinecraftServer,
@@ -60,17 +67,22 @@ class DeathHandler(
             server.playerList.broadcastSystemMessage(Component.literal(deathMessage), false)
             playDrama(player, deathMessage)
 
-            val gameModeSnapshot = mutableMapOf<UUID, GameType>()
             for (other in server.playerList.players) {
                 val otherUuid = other.getUUID()
-                if (otherUuid == uuid) continue
                 if (!runManager.isParticipant(otherUuid) || runManager.isDead(otherUuid)) continue
-                gameModeSnapshot[otherUuid] = other.gameMode()
                 other.setGameMode(GameType.SPECTATOR)
             }
 
             runManager.setState(RunState.VOTE_PENDING)
-            voteManager.startVote(gameModeSnapshot)
+            voteManager.startVote()
+        }
+
+        // Belt-and-braces: force spectator on respawn regardless of the vanilla hardcore
+        // flag, since a dead participant clicking "Respawn" must never come back alive.
+        ServerPlayerEvents.AFTER_RESPAWN.register { _, newPlayer, _ ->
+            if (runManager.isDead(newPlayer.getUUID())) {
+                newPlayer.setGameMode(GameType.SPECTATOR)
+            }
         }
     }
 

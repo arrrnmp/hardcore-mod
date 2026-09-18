@@ -64,7 +64,9 @@ class AdminService(
                     Component.literal("An operator forced a re-roll."),
                     false,
                 )
-                rerollCoordinator.requestReroll()
+                // No vote to consult - a forced re-roll carries the whole current roster
+                // into the new run, same as if everyone had voted yes.
+                rerollCoordinator.requestReroll(runManager.rosterSnapshot())
             }
             AdminActionType.KICK_PLAYER -> action.targetUuid?.let { kickPlayer(UUID.fromString(it)) }
             AdminActionType.UPDATE_CONFIG -> action.voteDurationSeconds?.let {

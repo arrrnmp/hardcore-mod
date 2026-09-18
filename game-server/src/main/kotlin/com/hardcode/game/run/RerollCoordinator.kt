@@ -11,10 +11,12 @@ import kotlin.random.Random
 
 /**
  * Kicks off a world re-roll after a passed vote: publishes the request to Redis (where
- * run-launcher is listening to actually swap the world folder and restart the JVM - see
- * run-launcher's `RerollWatcher`), then gracefully stops this server so run-launcher can do
- * its job. If Redis isn't reachable, there's no run-launcher to hand off to, so this falls
- * back to just continuing on the current world rather than silently hanging the run.
+ * run-launcher is listening to actually swap the world folder and restart the JVM, and the
+ * proxy is listening to move [yesVoterUuids] into Limbo then into the new run once it's
+ * ready - see run-launcher's `Main.kt` and proxy's `RerollRoutingListener`), then gracefully
+ * stops this server so run-launcher can do its job. If Redis isn't reachable, there's no
+ * run-launcher to hand off to, so this falls back to just continuing on the current world
+ * rather than silently hanging the run.
  */
 class RerollCoordinator(
     private val server: MinecraftServer,
@@ -23,7 +25,8 @@ class RerollCoordinator(
 ) {
     private val logger = LoggerFactory.getLogger("hardcore-game")
 
-    fun requestReroll() {
+    /** [yesVoterUuids] is who the proxy should carry over into the new run - see the class doc. */
+    fun requestReroll(yesVoterUuids: Set<UUID> = emptySet()) {
         val newRunId = UUID.randomUUID().toString()
         val newSeed = Random.nextLong()
 
@@ -32,7 +35,7 @@ class RerollCoordinator(
                 bus.publish(
                     RedisSchema.Channels.REROLL_REQUESTED,
                     RedisEvent.RerollRequested.serializer(),
-                    RedisEvent.RerollRequested(runManager.runId, newRunId, newSeed),
+                    RedisEvent.RerollRequested(runManager.runId, newRunId, newSeed, yesVoterUuids.map { it.toString() }),
                 )
             }.onFailure { logger.warn("Failed to publish reroll request: {}", it.message) }.isSuccess
         } ?: false

@@ -13,7 +13,10 @@ import com.hardcode.client.stats.StatsClientState
 import com.hardcode.client.stats.StatsHud
 import com.hardcode.client.stats.StatsKeybind
 import com.hardcode.client.stats.StatsSnapshotPayload
+import com.hardcode.client.storage.HallOfShamePayload
+import com.hardcode.client.storage.HallOfShameScreen
 import com.hardcode.common.model.AdminSnapshot
+import com.hardcode.common.model.LeaderboardEntry
 import com.hardcode.common.model.StatsSnapshot
 import kotlinx.serialization.json.Json
 import net.fabricmc.api.ClientModInitializer
@@ -42,6 +45,7 @@ object HardcoreClientMod : ClientModInitializer {
         PayloadTypeRegistry.serverboundPlay().register(AdminActionPayload.TYPE, AdminActionPayload.CODEC)
         PayloadTypeRegistry.clientboundPlay().register(DeathFlashPayload.TYPE, DeathFlashPayload.CODEC)
         PayloadTypeRegistry.clientboundPlay().register(StatsSnapshotPayload.TYPE, StatsSnapshotPayload.CODEC)
+        PayloadTypeRegistry.clientboundPlay().register(HallOfShamePayload.TYPE, HallOfShamePayload.CODEC)
 
         ClientPlayNetworking.registerGlobalReceiver(FreezeStatePayload.TYPE) { payload, _ ->
             FreezeClientState.update(payload)
@@ -64,6 +68,12 @@ object HardcoreClientMod : ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(StatsSnapshotPayload.TYPE) { payload, _ ->
             runCatching { json.decodeFromString<StatsSnapshot>(payload.snapshotJson) }
                 .onSuccess { StatsClientState.snapshot = it }
+        }
+
+        ClientPlayNetworking.registerGlobalReceiver(HallOfShamePayload.TYPE) { payload, context ->
+            val entries = runCatching { json.decodeFromString<List<LeaderboardEntry>>(payload.leaderboardJson) }.getOrNull()
+                ?: return@registerGlobalReceiver
+            context.client().setScreenAndShow(HallOfShameScreen(entries))
         }
 
         StatsKeybind.register()

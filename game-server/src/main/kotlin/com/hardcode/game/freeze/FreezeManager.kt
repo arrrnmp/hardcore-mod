@@ -4,10 +4,17 @@ import com.hardcode.common.redis.RedisEvent
 import com.hardcode.common.redis.RedisEventBus
 import com.hardcode.common.redis.RedisSchema
 import com.hardcode.game.run.RunManager
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents
+import net.fabricmc.fabric.api.event.player.AttackBlockCallback
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents
+import net.fabricmc.fabric.api.event.player.UseBlockCallback
+import net.fabricmc.fabric.api.event.player.UseEntityCallback
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.world.InteractionResult
 import org.slf4j.LoggerFactory
 import java.util.UUID
 
@@ -18,13 +25,13 @@ import java.util.UUID
  * admin panel's force-freeze/unfreeze action, layered on top of the same mechanism: frozen
  * whenever *either* someone's missing *or* an operator forced it.
  *
- * Built on vanilla's own `/tick freeze` primitive
- * ([net.minecraft.server.ServerTickRateManager.setFrozen]) rather than a custom mixin -
- * that's a real, shipped Mojang feature specifically designed to pause world simulation
- * (entity motion/AI, random/block ticks, weather, time) on a *live* multiplayer server
- * without kicking anyone, which is exactly this requirement (a player mid-jump stays
- * mid-jump; someone standing in lava stops taking damage) with far less risk than
- * hand-rolling the same thing via mixins into the tick loop.
+ * Uses vanilla's own `/tick freeze` primitive ([net.minecraft.server.ServerTickRateManager.setFrozen])
+ * for passive world simulation (entity AI, random/block ticks, weather, time) - but that
+ * alone does **not** stop player-driven actions (movement, block breaking, interaction all
+ * still went through in testing, since those are handled via packet processing rather than
+ * world ticking). So [tick] additionally pins every participant's position back to where
+ * they were when the freeze started, and [registerEnforcement] cancels block break/place,
+ * entity attack/interact, and damage for participants while frozen.
  */
 class FreezeManager(
     private val server: MinecraftServer,
@@ -35,6 +42,7 @@ class FreezeManager(
     private val missing = linkedSetOf<UUID>()
     private var lastMissingName: String = ""
     private var adminForced = false
+    private val frozenPositions = mutableMapOf<UUID, DoubleArray>()
 
     val isFrozen: Boolean
         get() = missing.isNotEmpty() || adminForced
@@ -42,8 +50,44 @@ class FreezeManager(
     val missingPlayers: Set<UUID>
         get() = missing.toSet()
 
+    /** Registers the block/entity/damage cancellation - call once at mod init, not per-run. */
+    fun registerEnforcement() {
+        PlayerBlockBreakEvents.BEFORE.register { _, player, _, _, _ -> !isBlocked(player.getUUID()) }
+        AttackBlockCallback.EVENT.register { player, _, _, _, _ ->
+            if (isBlocked(player.getUUID())) InteractionResult.FAIL else InteractionResult.PASS
+        }
+        UseBlockCallback.EVENT.register { player, _, _, _ ->
+            if (isBlocked(player.getUUID())) InteractionResult.FAIL else InteractionResult.PASS
+        }
+        AttackEntityCallback.EVENT.register { player, _, _, _, _ ->
+            if (isBlocked(player.getUUID())) InteractionResult.FAIL else InteractionResult.PASS
+        }
+        UseEntityCallback.EVENT.register { player, _, _, _, _ ->
+            if (isBlocked(player.getUUID())) InteractionResult.FAIL else InteractionResult.PASS
+        }
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register { entity, _, _ ->
+            !(entity is ServerPlayer && isBlocked(entity.getUUID()))
+        }
+    }
+
+    private fun isBlocked(uuid: UUID): Boolean = isFrozen && runManager.isParticipant(uuid)
+
+    /** Call every server tick: pins frozen participants back to their position at freeze-start. */
+    fun tick() {
+        if (!isFrozen) return
+        for ((uuid, pos) in frozenPositions) {
+            val player = server.playerList.getPlayer(uuid) ?: continue
+            if (player.getX() != pos[0] || player.getY() != pos[1] || player.getZ() != pos[2]) {
+                player.teleportTo(pos[0], pos[1], pos[2])
+            }
+        }
+    }
+
     /** Call on every join, including ones unrelated to freezing, to sync current state. */
     fun syncStateTo(player: ServerPlayer) {
+        if (isFrozen && runManager.isParticipant(player.getUUID())) {
+            capturePosition(player)
+        }
         ServerPlayNetworking.send(player, FreezeStatePayload(isFrozen, lastMissingName))
     }
 
@@ -90,10 +134,26 @@ class FreezeManager(
         val nowFrozen = isFrozen
         if (nowFrozen != wasFrozen) {
             server.tickRateManager().setFrozen(nowFrozen)
+            if (nowFrozen) {
+                captureAllPositions()
+            } else {
+                frozenPositions.clear()
+            }
             server.playerList.broadcastSystemMessage(Component.literal(message), false)
             logger.info(message)
         }
         broadcastState()
+    }
+
+    private fun captureAllPositions() {
+        frozenPositions.clear()
+        for (player in server.playerList.players) {
+            if (runManager.isParticipant(player.getUUID())) capturePosition(player)
+        }
+    }
+
+    private fun capturePosition(player: ServerPlayer) {
+        frozenPositions[player.getUUID()] = doubleArrayOf(player.getX(), player.getY(), player.getZ())
     }
 
     private fun broadcastState() {

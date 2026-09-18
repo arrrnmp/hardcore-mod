@@ -1,8 +1,12 @@
 package com.hardcode.game.command
 
+import com.hardcode.common.model.LeaderboardEntry
 import com.hardcode.common.model.VoteChoice
 import com.hardcode.game.HardcoreGameMod
+import com.hardcode.game.storage.HallOfShamePayload
 import com.mojang.brigadier.CommandDispatcher
+import kotlinx.serialization.json.Json
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.commands.Commands
 import net.minecraft.network.chat.Component
@@ -25,7 +29,8 @@ object HardcoreCommands {
                         .then(Commands.literal("yes").executes { ctx -> castVote(ctx.source, VoteChoice.YES) })
                         .then(Commands.literal("no").executes { ctx -> castVote(ctx.source, VoteChoice.NO) }),
                 )
-                .then(Commands.literal("status").executes { ctx -> sendStatus(ctx.source) }),
+                .then(Commands.literal("status").executes { ctx -> sendStatus(ctx.source) })
+                .then(Commands.literal("halloffame").executes { ctx -> sendHallOfShame(ctx.source) }),
         )
 
         dispatcher.register(
@@ -59,6 +64,14 @@ object HardcoreCommands {
             },
             false,
         )
+        return 1
+    }
+
+    /** Available to anyone, unlike the admin panel - see the project plan section 10. */
+    private fun sendHallOfShame(source: CommandSourceStack): Int {
+        val player = source.playerOrException
+        val entries = HardcoreGameMod.hallOfShame.leaderboard().map { LeaderboardEntry(it.playerName, it.deaths) }
+        ServerPlayNetworking.send(player, HallOfShamePayload(Json.encodeToString(entries)))
         return 1
     }
 

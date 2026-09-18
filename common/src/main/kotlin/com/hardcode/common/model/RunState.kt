@@ -14,7 +14,17 @@ enum class RunState {
     /** Someone died; everyone else is spectating in place while a continue/stop vote runs. */
     VOTE_PENDING,
 
-    /** The vote passed; the game server world is being torn down and rebuilt on a new seed. */
+    /**
+     * The vote failed (or no vote has passed yet since the death): this run is over for
+     * good. Everyone stays spectating this same world - the only ways out are a future
+     * passed vote or an operator forcing a re-roll. There is no going back to survival on
+     * this world once a death has happened; the vote only ever decides *when* to move on,
+     * never whether to keep playing this run.
+     */
+    RUN_ENDED,
+
+    /** The vote passed (or an operator forced it); the game server world is being torn
+     *  down and rebuilt on a new seed. */
     REROLLING,
 }
 

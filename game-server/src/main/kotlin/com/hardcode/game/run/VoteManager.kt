@@ -7,15 +7,16 @@ import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerBossEvent
 import net.minecraft.world.BossEvent
-import net.minecraft.world.level.GameType
 import org.slf4j.LoggerFactory
 import java.util.UUID
 
 /**
- * Runs the "continue this run?" vote that follows a death: every online, still-alive run
- * participant gets a ballot, shown via a boss bar countdown. On resolution, restores
- * everyone's pre-vote gamemode, then on a pass hands off to [rerollCoordinator] to actually
- * re-roll the world (Phase 2); on a fail, the run just continues.
+ * Runs the "start the next run?" vote that follows a death: every online, still-alive run
+ * participant gets a ballot, shown via a boss bar countdown. This run is over the moment
+ * someone dies, full stop - the vote only ever decides *when* to re-roll, never whether to
+ * keep playing this world (see [RunState.RUN_ENDED]). A pass hands off to
+ * [rerollCoordinator] immediately; a fail just leaves everyone spectating until a future
+ * vote passes or an operator forces a re-roll.
  */
 class VoteManager(
     private val server: MinecraftServer,
@@ -30,11 +31,10 @@ class VoteManager(
     private var voteDurationTicks = 20 * 60
     private val votes = mutableMapOf<UUID, VoteChoice>()
     private var eligibleVoters: Set<UUID> = emptySet()
-    private var preVoteGameModes: Map<UUID, GameType> = emptyMap()
 
     private val bossBar = ServerBossEvent(
         UUID.randomUUID(),
-        Component.literal("Continue this run?"),
+        Component.literal("Start the next run?"),
         BossEvent.BossBarColor.GREEN,
         BossEvent.BossBarOverlay.PROGRESS,
     )
@@ -42,8 +42,7 @@ class VoteManager(
     val isActive: Boolean
         get() = active
 
-    fun startVote(gameModeSnapshot: Map<UUID, GameType> = emptyMap()) {
-        preVoteGameModes = gameModeSnapshot
+    fun startVote() {
         eligibleVoters = server.playerList.players
             .map { it.getUUID() }
             .filter { runManager.isParticipant(it) && !runManager.isDead(it) }
@@ -62,7 +61,7 @@ class VoteManager(
             bossBar.addPlayer(player)
             player.sendSystemMessage(
                 Component.literal(
-                    "Vote: should the run continue? /run vote yes  or  /run vote no  " +
+                    "Vote: start the next run now? /run vote yes  or  /run vote no  " +
                         "(${configManager.config.voteDurationSeconds}s)",
                 ),
             )
@@ -94,7 +93,7 @@ class VoteManager(
         if (ticksRemaining % 20 == 0) {
             val yes = votes.values.count { it == VoteChoice.YES }
             val no = votes.values.count { it == VoteChoice.NO }
-            bossBar.setName(Component.literal("Continue? YES $yes - NO $no  (${ticksRemaining / 20}s)"))
+            bossBar.setName(Component.literal("Start next run? YES $yes - NO $no  (${ticksRemaining / 20}s)"))
         }
         if (ticksRemaining <= 0) resolve()
     }
@@ -108,23 +107,22 @@ class VoteManager(
         val no = votes.values.count { it == VoteChoice.NO }
         val passed = yes > no
 
-        for ((uuid, previousMode) in preVoteGameModes) {
-            server.playerList.getPlayer(uuid)?.setGameMode(previousMode)
-        }
-        preVoteGameModes = emptyMap()
-
         logger.info("Vote resolved: passed={} yes={} no={}", passed, yes, no)
 
         if (passed) {
             server.playerList.broadcastSystemMessage(Component.literal("Vote passed ($yes-$no)."), false)
             runManager.setState(RunState.REROLLING)
-            rerollCoordinator.requestReroll()
+            val yesVoters = votes.filterValues { it == VoteChoice.YES }.keys
+            rerollCoordinator.requestReroll(yesVoters)
         } else {
             server.playerList.broadcastSystemMessage(
-                Component.literal("Vote failed ($yes-$no) - the run continues."),
+                Component.literal(
+                    "Vote failed ($yes-$no) - this run is over. Wait for a future vote, " +
+                        "or ask an operator to force a re-roll.",
+                ),
                 false,
             )
-            runManager.setState(RunState.RUN_ACTIVE)
+            runManager.setState(RunState.RUN_ENDED)
         }
     }
 }
