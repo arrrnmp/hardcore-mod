@@ -7,6 +7,8 @@ import com.hardcode.common.redis.RedisSchema
 import com.hardcode.common.storage.Database
 import com.hardcode.game.command.HardcoreCommands
 import com.hardcode.game.death.DeathHandler
+import com.hardcode.game.freeze.FreezeManager
+import com.hardcode.game.freeze.FreezeStatePayload
 import com.hardcode.game.run.RerollCoordinator
 import com.hardcode.game.run.RunManager
 import com.hardcode.game.run.VoteManager
@@ -16,18 +18,18 @@ import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.fabricmc.loader.api.FabricLoader
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 
 /**
- * Entry point for the game-server mod. Phase 2: adds the world re-roll pipeline on top of
- * Phase 1's run-lifecycle MVP - a passed vote now actually hands off to run-launcher (via
- * Redis) and halts this process instead of just logging what would happen.
+ * Entry point for the game-server mod. Phase 4: adds the freeze-on-disconnect system on top
+ * of Phase 2's reroll pipeline - any roster member disconnecting now halts world simulation
+ * (via vanilla's own tick-freeze) until they return, per the project plan section 5.
  *
- * The dedicated Limbo server hookup (Phase 3), freeze-on-disconnect (Phase 4) and the admin
- * panel (Phase 5) are not implemented yet - see the project plan.
+ * The admin panel (Phase 5) is not implemented yet - see the project plan.
  */
 object HardcoreGameMod : ModInitializer {
     private val logger = LoggerFactory.getLogger("hardcore-game")
@@ -42,11 +44,14 @@ object HardcoreGameMod : ModInitializer {
         private set
 
     private lateinit var hallOfShame: HallOfShame
+    private lateinit var freezeManager: FreezeManager
     private var database: Database? = null
     private var redis: RedisEventBus? = null
 
     override fun onInitialize() {
         logger.info("Hardcore Game Server mod initializing")
+
+        PayloadTypeRegistry.clientboundPlay().register(FreezeStatePayload.TYPE, FreezeStatePayload.CODEC)
 
         redis = runCatching { RedisEventBus(RedisConnection.fromEnv()) }
             .onFailure { logger.warn("Could not set up Redis client, reroll hand-off will be disabled: {}", it.message) }
@@ -66,6 +71,7 @@ object HardcoreGameMod : ModInitializer {
             val rerollCoordinator = RerollCoordinator(server, runManager, redis)
             voteManager = VoteManager(server, runManager, rerollCoordinator)
             DeathHandler(server, runManager, voteManager, hallOfShame).register()
+            freezeManager = FreezeManager(server, runManager, redis)
         }
 
         // Not SERVER_STARTING: PlayerList/the overworld don't exist yet at that point
@@ -99,6 +105,13 @@ object HardcoreGameMod : ModInitializer {
                 player.getGameProfile().name,
                 System.currentTimeMillis(),
             )
+            freezeManager.onReconnect(player.getUUID())
+            freezeManager.syncStateTo(player)
+        }
+
+        ServerPlayConnectionEvents.DISCONNECT.register { handler, _ ->
+            val player = handler.player
+            freezeManager.onDisconnect(player.getUUID(), player.getGameProfile().name)
         }
 
         ServerTickEvents.END_SERVER_TICK.register {
