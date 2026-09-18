@@ -1,0 +1,48 @@
+[versions]
+# --- Minecraft / Fabric toolchain ---
+# Verify these against https://fabricmc.net/develop/ and https://modrinth.com/mod/fabric-api
+# before the first build - they move fast and this file was pinned 2026-09-18.
+# NOTE: Minecraft 26.1+ ships unobfuscated - Yarn mappings are discontinued as of 26.1, and
+# fabric-loom no longer remaps Minecraft or mods. Mappings now come from
+# loom.officialMojangMappings() (configured directly in each module's build.gradle.kts, not
+# via a version-catalog string) and there is no more remapJar step - plain `jar`/shadowJar
+# output is final. Confirmed live via maven.fabricmc.net (fabric-loom release 1.18.2; the old
+# net.fabricmc:yarn maven-metadata.xml has not been updated since 2026-05-27).
+minecraft = "26.3"
+fabricLoader = "0.19.5"
+fabricApi = "0.160.7+26.3"
+fabricLanguageKotlin = "1.14.1+kotlin.2.4.20"
+loom = "1.18.2"
+
+# --- Velocity proxy ---
+velocityApi = "4.0.0"
+
+# --- Shared JVM tooling ---
+kotlin = "2.4.20"
+kotlinxSerialization = "1.7.3"
+kotlinxCoroutines = "1.9.0"
+jedis = "5.2.0"
+sqliteJdbc = "3.47.1.0"
+shadow = "9.6.1"
+slf4j = "2.0.16"
+
+[libraries]
+fabric-api = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabricApi" }
+fabric-language-kotlin = { module = "net.fabricmc:fabric-language-kotlin", version.ref = "fabricLanguageKotlin" }
+velocity-api = { module = "com.velocitypowered:velocity-api", version.ref = "velocityApi" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+jedis = { module = "redis.clients:jedis", version.ref = "jedis" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
+
+[plugins]
+# NOTE: "net.fabricmc.fabric-loom" (not the older bare "fabric-loom" id) is the plugin for
+# unobfuscated Minecraft (26.1+) - it performs no remapping at all. The bare "fabric-loom" id
+# is the legacy plugin still used for pre-26.1 (obfuscated + Yarn/Mojmap) targets. Confirmed
+# via maven.fabricmc.net: both marker artifacts exist independently, release 1.18.2 each.
+fabric-loom = { id = "net.fabricmc.fabric-loom", version.ref = "loom" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }

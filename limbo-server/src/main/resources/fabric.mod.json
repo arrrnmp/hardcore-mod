@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "hardcore-limbo",
+  "name": "Hardcore Limbo Server",
+  "version": "${version}",
+  "description": "The End-like waiting dimension players sit in between runs.",
+  "authors": ["hardcode-mod"],
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      { "adapter": "kotlin", "value": "com.hardcode.limbo.HardcoreLimboMod" }
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "fabric-api": "*",
+    "fabric-language-kotlin": "*",
+    "minecraft": "26.3"
+  }
+}

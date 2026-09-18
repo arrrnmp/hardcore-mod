@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "hardcore-game",
+  "name": "Hardcore Game Server",
+  "version": "${version}",
+  "description": "Run lifecycle, mass-spectator-on-death, freeze-on-disconnect and Hall of Shame logic for the game server.",
+  "authors": ["hardcode-mod"],
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      { "adapter": "kotlin", "value": "com.hardcode.game.HardcoreGameMod" }
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "fabric-api": "*",
+    "fabric-language-kotlin": "*",
+    "minecraft": "26.3"
+  }
+}

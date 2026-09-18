@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "hardcore-client",
+  "name": "Hardcore Client",
+  "version": "${version}",
+  "description": "HUD, statistics screen, death drama and freeze visuals. Required for every player.",
+  "authors": ["hardcode-mod"],
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      { "adapter": "kotlin", "value": "com.hardcode.client.HardcoreClientMod" }
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "fabric-api": "*",
+    "fabric-language-kotlin": "*",
+    "minecraft": "26.3"
+  }
+}
