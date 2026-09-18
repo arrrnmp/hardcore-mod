@@ -1,5 +1,6 @@
 package com.hardcode.game.freeze
 
+import com.hardcode.common.model.RunState
 import com.hardcode.common.redis.RedisEvent
 import com.hardcode.common.redis.RedisEventBus
 import com.hardcode.common.redis.RedisSchema
@@ -93,6 +94,11 @@ class FreezeManager(
 
     fun onDisconnect(uuid: UUID, playerName: String) {
         if (!runManager.isParticipant(uuid)) return
+        // The server is already tearing down for a re-roll (players getting moved off to
+        // Limbo trigger their own disconnect from this server) - freezing a run that's about
+        // to be destroyed anyway is meaningless noise, confirmed by real testing where this
+        // fired mid-shutdown for a player who'd already been moved to Limbo.
+        if (runManager.state == RunState.REROLLING) return
         val wasFrozen = isFrozen
         missing.add(uuid)
         lastMissingName = playerName

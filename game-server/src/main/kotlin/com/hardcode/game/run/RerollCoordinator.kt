@@ -7,6 +7,7 @@ import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import org.slf4j.LoggerFactory
 import java.util.UUID
+import kotlin.concurrent.thread
 import kotlin.random.Random
 
 /**
@@ -24,6 +25,16 @@ class RerollCoordinator(
     private val redis: RedisEventBus?,
 ) {
     private val logger = LoggerFactory.getLogger("hardcore-game")
+
+    companion object {
+        /**
+         * Confirmed necessary by real testing, not just defensive: calling `server.halt()`
+         * right after publishing left the proxy no time to actually finish moving yes-voters
+         * to Limbo before their connection to this server got yanked out from under them
+         * mid-switch, kicking them off the proxy entirely instead of landing them in Limbo.
+         */
+        private const val HALT_DELAY_MILLIS = 3000L
+    }
 
     /** [yesVoterUuids] is who the proxy should carry over into the new run - see the class doc. */
     fun requestReroll(yesVoterUuids: Set<UUID> = emptySet()) {
@@ -54,6 +65,10 @@ class RerollCoordinator(
             Component.literal("The world is being re-rolled - see you in the next run!"),
             false,
         )
-        server.halt(false)
+
+        thread(isDaemon = true, name = "reroll-halt-delay") {
+            Thread.sleep(HALT_DELAY_MILLIS)
+            server.execute { server.halt(false) }
+        }
     }
 }
