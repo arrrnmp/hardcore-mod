@@ -10,12 +10,15 @@ import com.hardcode.game.admin.AdminService
 import com.hardcode.game.admin.AdminSnapshotPayload
 import com.hardcode.game.command.HardcoreCommands
 import com.hardcode.game.config.ConfigManager
+import com.hardcode.game.death.DeathFlashPayload
 import com.hardcode.game.death.DeathHandler
 import com.hardcode.game.freeze.FreezeManager
 import com.hardcode.game.freeze.FreezeStatePayload
 import com.hardcode.game.run.RerollCoordinator
 import com.hardcode.game.run.RunManager
 import com.hardcode.game.run.VoteManager
+import com.hardcode.game.stats.StatsBroadcaster
+import com.hardcode.game.stats.StatsSnapshotPayload
 import com.hardcode.game.storage.HallOfShame
 import com.hardcode.game.tablist.HealthTabList
 import net.fabricmc.api.ModInitializer
@@ -51,6 +54,7 @@ object HardcoreGameMod : ModInitializer {
 
     private lateinit var hallOfShame: HallOfShame
     private lateinit var freezeManager: FreezeManager
+    private lateinit var statsBroadcaster: StatsBroadcaster
     private var database: Database? = null
     private var redis: RedisEventBus? = null
 
@@ -60,6 +64,8 @@ object HardcoreGameMod : ModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(FreezeStatePayload.TYPE, FreezeStatePayload.CODEC)
         PayloadTypeRegistry.clientboundPlay().register(AdminSnapshotPayload.TYPE, AdminSnapshotPayload.CODEC)
         PayloadTypeRegistry.serverboundPlay().register(AdminActionPayload.TYPE, AdminActionPayload.CODEC)
+        PayloadTypeRegistry.clientboundPlay().register(DeathFlashPayload.TYPE, DeathFlashPayload.CODEC)
+        PayloadTypeRegistry.clientboundPlay().register(StatsSnapshotPayload.TYPE, StatsSnapshotPayload.CODEC)
 
         redis = runCatching { RedisEventBus(RedisConnection.fromEnv()) }
             .onFailure { logger.warn("Could not set up Redis client, reroll hand-off will be disabled: {}", it.message) }
@@ -79,8 +85,9 @@ object HardcoreGameMod : ModInitializer {
 
             val rerollCoordinator = RerollCoordinator(server, runManager, redis)
             voteManager = VoteManager(server, runManager, rerollCoordinator, configManager)
-            DeathHandler(server, runManager, voteManager, hallOfShame).register()
+            DeathHandler(server, runManager, voteManager, hallOfShame, configManager).register()
             freezeManager = FreezeManager(server, runManager, redis)
+            statsBroadcaster = StatsBroadcaster(server, runManager)
             adminService = AdminService(
                 server,
                 runManager,
@@ -138,6 +145,7 @@ object HardcoreGameMod : ModInitializer {
 
         ServerTickEvents.END_SERVER_TICK.register {
             if (::voteManager.isInitialized) voteManager.tick()
+            if (::statsBroadcaster.isInitialized) statsBroadcaster.tick()
         }
 
         // This can fire before SERVER_STARTING above, so HardcoreCommands must resolve

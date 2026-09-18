@@ -35,7 +35,7 @@ class VoteManager(
     private val bossBar = ServerBossEvent(
         UUID.randomUUID(),
         Component.literal("Continue this run?"),
-        BossEvent.BossBarColor.RED,
+        BossEvent.BossBarColor.GREEN,
         BossEvent.BossBarOverlay.PROGRESS,
     )
 
@@ -56,6 +56,7 @@ class VoteManager(
         bossBar.removeAllPlayers()
         bossBar.isVisible = true
         bossBar.setProgress(1f)
+        bossBar.setColor(BossEvent.BossBarColor.GREEN)
         for (uuid in eligibleVoters) {
             val player = server.playerList.getPlayer(uuid) ?: continue
             bossBar.addPlayer(player)
@@ -81,7 +82,15 @@ class VoteManager(
     fun tick() {
         if (!active) return
         ticksRemaining--
-        bossBar.setProgress((ticksRemaining.toFloat() / voteDurationTicks.toFloat()).coerceIn(0f, 1f))
+        val fraction = (ticksRemaining.toFloat() / voteDurationTicks.toFloat()).coerceIn(0f, 1f)
+        bossBar.setProgress(fraction)
+        bossBar.setColor(
+            when {
+                fraction > 0.5f -> BossEvent.BossBarColor.GREEN
+                fraction > 0.2f -> BossEvent.BossBarColor.YELLOW
+                else -> BossEvent.BossBarColor.RED
+            },
+        )
         if (ticksRemaining % 20 == 0) {
             val yes = votes.values.count { it == VoteChoice.YES }
             val no = votes.values.count { it == VoteChoice.NO }

@@ -6,9 +6,17 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 
-/** Operator-tunable settings, persisted so they survive restarts. */
+/**
+ * Operator-tunable settings, persisted so they survive restarts. [deathTitleTemplate] supports
+ * a `%player%` placeholder; the subtitle always uses vanilla's own contextual death message
+ * (e.g. "Steve was slain by Zombie") rather than a second template, since that's already
+ * better and richer than anything we'd template by hand.
+ */
 @Serializable
-data class HardcoreConfig(val voteDurationSeconds: Int = 60)
+data class HardcoreConfig(
+    val voteDurationSeconds: Int = 60,
+    val deathTitleTemplate: String = "%player% HAS FALLEN",
+)
 
 /** Loads/saves [HardcoreConfig] and hot-reloads it for anything reading [config] live. */
 class ConfigManager(private val path: Path) {
