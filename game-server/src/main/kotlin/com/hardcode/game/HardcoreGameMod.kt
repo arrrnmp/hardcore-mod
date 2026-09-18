@@ -5,7 +5,11 @@ import com.hardcode.common.redis.RedisEvent
 import com.hardcode.common.redis.RedisEventBus
 import com.hardcode.common.redis.RedisSchema
 import com.hardcode.common.storage.Database
+import com.hardcode.game.admin.AdminActionPayload
+import com.hardcode.game.admin.AdminService
+import com.hardcode.game.admin.AdminSnapshotPayload
 import com.hardcode.game.command.HardcoreCommands
+import com.hardcode.game.config.ConfigManager
 import com.hardcode.game.death.DeathHandler
 import com.hardcode.game.freeze.FreezeManager
 import com.hardcode.game.freeze.FreezeStatePayload
@@ -20,16 +24,15 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.fabricmc.loader.api.FabricLoader
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 
 /**
- * Entry point for the game-server mod. Phase 4: adds the freeze-on-disconnect system on top
- * of Phase 2's reroll pipeline - any roster member disconnecting now halts world simulation
- * (via vanilla's own tick-freeze) until they return, per the project plan section 5.
- *
- * The admin panel (Phase 5) is not implemented yet - see the project plan.
+ * Entry point for the game-server mod. Phase 5: adds the in-game admin panel on top of
+ * Phase 4's freeze system - run control / player management / Hall of Shame / config, all
+ * gated on operator status re-checked server-side for every action (see [AdminService]).
  */
 object HardcoreGameMod : ModInitializer {
     private val logger = LoggerFactory.getLogger("hardcore-game")
@@ -43,6 +46,9 @@ object HardcoreGameMod : ModInitializer {
     lateinit var voteManager: VoteManager
         private set
 
+    lateinit var adminService: AdminService
+        private set
+
     private lateinit var hallOfShame: HallOfShame
     private lateinit var freezeManager: FreezeManager
     private var database: Database? = null
@@ -52,6 +58,8 @@ object HardcoreGameMod : ModInitializer {
         logger.info("Hardcore Game Server mod initializing")
 
         PayloadTypeRegistry.clientboundPlay().register(FreezeStatePayload.TYPE, FreezeStatePayload.CODEC)
+        PayloadTypeRegistry.clientboundPlay().register(AdminSnapshotPayload.TYPE, AdminSnapshotPayload.CODEC)
+        PayloadTypeRegistry.serverboundPlay().register(AdminActionPayload.TYPE, AdminActionPayload.CODEC)
 
         redis = runCatching { RedisEventBus(RedisConnection.fromEnv()) }
             .onFailure { logger.warn("Could not set up Redis client, reroll hand-off will be disabled: {}", it.message) }
@@ -64,14 +72,24 @@ object HardcoreGameMod : ModInitializer {
             val db = Database(dataDir.resolve("hardcore.db"))
             database = db
             hallOfShame = HallOfShame(db)
+            val configManager = ConfigManager(dataDir.resolve("config.json"))
 
             runManager = RunManager()
             logger.info("Starting run {}", runManager.runId)
 
             val rerollCoordinator = RerollCoordinator(server, runManager, redis)
-            voteManager = VoteManager(server, runManager, rerollCoordinator)
+            voteManager = VoteManager(server, runManager, rerollCoordinator, configManager)
             DeathHandler(server, runManager, voteManager, hallOfShame).register()
             freezeManager = FreezeManager(server, runManager, redis)
+            adminService = AdminService(
+                server,
+                runManager,
+                voteManager,
+                freezeManager,
+                rerollCoordinator,
+                hallOfShame,
+                configManager,
+            )
         }
 
         // Not SERVER_STARTING: PlayerList/the overworld don't exist yet at that point
@@ -114,12 +132,17 @@ object HardcoreGameMod : ModInitializer {
             freezeManager.onDisconnect(player.getUUID(), player.getGameProfile().name)
         }
 
+        ServerPlayNetworking.registerGlobalReceiver(AdminActionPayload.TYPE) { payload, context ->
+            adminService.handleAction(context.player(), payload)
+        }
+
         ServerTickEvents.END_SERVER_TICK.register {
             if (::voteManager.isInitialized) voteManager.tick()
         }
 
         // This can fire before SERVER_STARTING above, so HardcoreCommands must resolve
-        // runManager/voteManager itself at command-execution time, not receive them here.
+        // runManager/voteManager/adminService itself at command-execution time, not receive
+        // them here.
         CommandRegistrationCallback.EVENT.register { dispatcher, _, _ ->
             HardcoreCommands.register(dispatcher)
         }

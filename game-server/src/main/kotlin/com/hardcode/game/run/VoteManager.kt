@@ -2,6 +2,7 @@ package com.hardcode.game.run
 
 import com.hardcode.common.model.RunState
 import com.hardcode.common.model.VoteChoice
+import com.hardcode.game.config.ConfigManager
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerBossEvent
@@ -20,12 +21,13 @@ class VoteManager(
     private val server: MinecraftServer,
     private val runManager: RunManager,
     private val rerollCoordinator: RerollCoordinator,
-    private val voteDurationTicks: Int = 20 * 60,
+    private val configManager: ConfigManager,
 ) {
     private val logger = LoggerFactory.getLogger("hardcore-game")
 
     private var active = false
     private var ticksRemaining = 0
+    private var voteDurationTicks = 20 * 60
     private val votes = mutableMapOf<UUID, VoteChoice>()
     private var eligibleVoters: Set<UUID> = emptySet()
     private var preVoteGameModes: Map<UUID, GameType> = emptyMap()
@@ -40,7 +42,7 @@ class VoteManager(
     val isActive: Boolean
         get() = active
 
-    fun startVote(gameModeSnapshot: Map<UUID, GameType>) {
+    fun startVote(gameModeSnapshot: Map<UUID, GameType> = emptyMap()) {
         preVoteGameModes = gameModeSnapshot
         eligibleVoters = server.playerList.players
             .map { it.getUUID() }
@@ -48,6 +50,7 @@ class VoteManager(
             .toSet()
         votes.clear()
         active = true
+        voteDurationTicks = configManager.config.voteDurationSeconds * 20
         ticksRemaining = voteDurationTicks
 
         bossBar.removeAllPlayers()
@@ -57,7 +60,10 @@ class VoteManager(
             val player = server.playerList.getPlayer(uuid) ?: continue
             bossBar.addPlayer(player)
             player.sendSystemMessage(
-                Component.literal("Vote: should the run continue? /run vote yes  or  /run vote no  (60s)"),
+                Component.literal(
+                    "Vote: should the run continue? /run vote yes  or  /run vote no  " +
+                        "(${configManager.config.voteDurationSeconds}s)",
+                ),
             )
         }
     }

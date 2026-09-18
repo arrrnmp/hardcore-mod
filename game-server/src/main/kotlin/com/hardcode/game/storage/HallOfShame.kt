@@ -52,6 +52,30 @@ class HallOfShame(private val database: Database) {
         }
     }
 
+    /** uuid -> player name for every profile ever created in [runId] - used to label the roster. */
+    fun playerNamesForRun(runId: String): Map<String, String> {
+        database.connection.prepareStatement(
+            "SELECT uuid, player_name FROM player_run_profiles WHERE run_id = ?",
+        ).use { stmt ->
+            stmt.setString(1, runId)
+            stmt.executeQuery().use { rs ->
+                val names = mutableMapOf<String, String>()
+                while (rs.next()) names[rs.getString("uuid")] = rs.getString("player_name")
+                return names
+            }
+        }
+    }
+
+    fun markKicked(runId: String, uuid: String) {
+        database.connection.prepareStatement(
+            "UPDATE player_run_profiles SET kicked = 1 WHERE run_id = ? AND uuid = ?",
+        ).use { stmt ->
+            stmt.setString(1, runId)
+            stmt.setString(2, uuid)
+            stmt.executeUpdate()
+        }
+    }
+
     /** Total death count for [uuid] across every run - the headline Hall of Shame stat. */
     fun totalDeaths(uuid: String): Int {
         database.connection.prepareStatement("SELECT COUNT(*) FROM deaths WHERE uuid = ?").use { stmt ->

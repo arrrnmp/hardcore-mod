@@ -53,6 +53,12 @@ class RunManager(runIdOverride: String? = System.getenv("HARDCODE_RUN_ID")) {
         dead.add(uuid)
     }
 
+    /** Operator kick-from-run: they're no longer tracked, so their absence can't freeze the run. */
+    fun removeFromRoster(uuid: UUID) {
+        roster.remove(uuid)
+        dead.remove(uuid)
+    }
+
     fun setState(newState: RunState) {
         state = newState
     }

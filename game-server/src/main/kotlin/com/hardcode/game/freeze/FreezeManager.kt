@@ -13,7 +13,12 @@ import java.util.UUID
 
 /**
  * Freezes the whole run solid the moment any roster member disconnects, and un-freezes once
- * every missing member is back. Built on vanilla's own `/tick freeze` primitive
+ * every missing member is back (or an operator kicks them from the run - see
+ * [forgetMissingPlayer]). Also supports a manual operator override ([setAdminForced]) for the
+ * admin panel's force-freeze/unfreeze action, layered on top of the same mechanism: frozen
+ * whenever *either* someone's missing *or* an operator forced it.
+ *
+ * Built on vanilla's own `/tick freeze` primitive
  * ([net.minecraft.server.ServerTickRateManager.setFrozen]) rather than a custom mixin -
  * that's a real, shipped Mojang feature specifically designed to pause world simulation
  * (entity motion/AI, random/block ticks, weather, time) on a *live* multiplayer server
@@ -29,9 +34,13 @@ class FreezeManager(
     private val logger = LoggerFactory.getLogger("hardcore-game")
     private val missing = linkedSetOf<UUID>()
     private var lastMissingName: String = ""
+    private var adminForced = false
 
     val isFrozen: Boolean
-        get() = missing.isNotEmpty()
+        get() = missing.isNotEmpty() || adminForced
+
+    val missingPlayers: Set<UUID>
+        get() = missing.toSet()
 
     /** Call on every join, including ones unrelated to freezing, to sync current state. */
     fun syncStateTo(player: ServerPlayer) {
@@ -43,16 +52,7 @@ class FreezeManager(
         val wasFrozen = isFrozen
         missing.add(uuid)
         lastMissingName = playerName
-
-        if (!wasFrozen) {
-            server.tickRateManager().setFrozen(true)
-            logger.info("Run frozen: waiting for {}", playerName)
-        }
-        server.playerList.broadcastSystemMessage(
-            Component.literal("Run frozen - waiting for $playerName to reconnect."),
-            false,
-        )
-        broadcastState()
+        applyTransition(wasFrozen, "Run frozen - waiting for $playerName to reconnect.")
 
         publish(RedisSchema.Channels.ROSTER_MEMBER_DISCONNECTED, RedisEvent.RosterMemberDisconnected.serializer()) {
             RedisEvent.RosterMemberDisconnected(runManager.runId, uuid.toString())
@@ -61,17 +61,39 @@ class FreezeManager(
 
     fun onReconnect(uuid: UUID) {
         if (!missing.remove(uuid)) return
-
-        if (!isFrozen) {
-            server.tickRateManager().setFrozen(false)
-            server.playerList.broadcastSystemMessage(Component.literal("Everyone's back - the run resumes!"), false)
-            logger.info("Run resumed")
-        }
-        broadcastState()
+        applyTransition(true, "Everyone's back - the run resumes!")
 
         publish(RedisSchema.Channels.ROSTER_MEMBER_RECONNECTED, RedisEvent.RosterMemberReconnected.serializer()) {
             RedisEvent.RosterMemberReconnected(runManager.runId, uuid.toString())
         }
+    }
+
+    /** Used when an operator kicks a still-missing player from the run - they're never
+     *  coming back, so stop waiting for them instead of requiring a real reconnect. */
+    fun forgetMissingPlayer(uuid: UUID) {
+        if (!missing.remove(uuid)) return
+        applyTransition(true, "An operator kicked $lastMissingName from the run - the run resumes!")
+    }
+
+    /** The admin panel's force-freeze/unfreeze action. */
+    fun setAdminForced(frozen: Boolean) {
+        if (adminForced == frozen) return
+        val wasFrozen = isFrozen
+        adminForced = frozen
+        applyTransition(
+            wasFrozen,
+            if (frozen) "An operator froze the run." else "An operator resumed the run.",
+        )
+    }
+
+    private fun applyTransition(wasFrozen: Boolean, message: String) {
+        val nowFrozen = isFrozen
+        if (nowFrozen != wasFrozen) {
+            server.tickRateManager().setFrozen(nowFrozen)
+            server.playerList.broadcastSystemMessage(Component.literal(message), false)
+            logger.info(message)
+        }
+        broadcastState()
     }
 
     private fun broadcastState() {

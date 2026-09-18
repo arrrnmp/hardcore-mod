@@ -8,13 +8,13 @@ import net.minecraft.commands.Commands
 import net.minecraft.network.chat.Component
 
 /**
- * `/run vote <yes|no>` and `/run status`. Admin panel commands land in Phase 5.
+ * `/run vote <yes|no>`, `/run status` and `/hardcore admin` (opens the admin panel).
  *
- * Reads [HardcoreGameMod.runManager]/[HardcoreGameMod.voteManager] inside each executor
- * lambda (not at [register] time): CommandRegistrationCallback can fire before
- * ServerLifecycleEvents.SERVER_STARTING has initialized those lateinit vars, but a player
- * can never run a command before the server has fully started, so resolving them lazily at
- * execution time is always safe.
+ * Reads [HardcoreGameMod.runManager]/[HardcoreGameMod.voteManager]/
+ * [HardcoreGameMod.adminService] inside each executor lambda (not at [register] time):
+ * CommandRegistrationCallback can fire before ServerLifecycleEvents.SERVER_STARTING has
+ * initialized those lateinit vars, but a player can never run a command before the server
+ * has fully started, so resolving them lazily at execution time is always safe.
  */
 object HardcoreCommands {
     fun register(dispatcher: CommandDispatcher<CommandSourceStack>) {
@@ -26,6 +26,11 @@ object HardcoreCommands {
                         .then(Commands.literal("no").executes { ctx -> castVote(ctx.source, VoteChoice.NO) }),
                 )
                 .then(Commands.literal("status").executes { ctx -> sendStatus(ctx.source) }),
+        )
+
+        dispatcher.register(
+            Commands.literal("hardcore")
+                .then(Commands.literal("admin").executes { ctx -> openAdminPanel(ctx.source) }),
         )
     }
 
@@ -54,6 +59,17 @@ object HardcoreCommands {
             },
             false,
         )
+        return 1
+    }
+
+    private fun openAdminPanel(source: CommandSourceStack): Int {
+        val player = source.playerOrException
+        val adminService = HardcoreGameMod.adminService
+        if (!adminService.isAuthorized(player)) {
+            source.sendFailure(Component.literal("You must be an operator to use the admin panel."))
+            return 0
+        }
+        adminService.sendSnapshot(player)
         return 1
     }
 }
