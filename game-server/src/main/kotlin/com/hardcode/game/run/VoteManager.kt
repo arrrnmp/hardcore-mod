@@ -13,12 +13,13 @@ import java.util.UUID
 /**
  * Runs the "continue this run?" vote that follows a death: every online, still-alive run
  * participant gets a ballot, shown via a boss bar countdown. On resolution, restores
- * everyone's pre-vote gamemode (Phase 1 has no reroll pipeline yet - that's Phase 2, which
- * will replace the "would reroll" log line with an actual world reroll on a pass).
+ * everyone's pre-vote gamemode, then on a pass hands off to [rerollCoordinator] to actually
+ * re-roll the world (Phase 2); on a fail, the run just continues.
  */
 class VoteManager(
     private val server: MinecraftServer,
     private val runManager: RunManager,
+    private val rerollCoordinator: RerollCoordinator,
     private val voteDurationTicks: Int = 20 * 60,
 ) {
     private val logger = LoggerFactory.getLogger("hardcore-game")
@@ -97,18 +98,18 @@ class VoteManager(
         }
         preVoteGameModes = emptyMap()
 
-        server.playerList.broadcastSystemMessage(
-            Component.literal(
-                if (passed) {
-                    "Vote passed ($yes-$no) - a world re-roll would happen here once Phase 2 lands."
-                } else {
-                    "Vote failed ($yes-$no) - the run continues."
-                },
-            ),
-            false,
-        )
-
-        runManager.setState(RunState.RUN_ACTIVE)
         logger.info("Vote resolved: passed={} yes={} no={}", passed, yes, no)
+
+        if (passed) {
+            server.playerList.broadcastSystemMessage(Component.literal("Vote passed ($yes-$no)."), false)
+            runManager.setState(RunState.REROLLING)
+            rerollCoordinator.requestReroll()
+        } else {
+            server.playerList.broadcastSystemMessage(
+                Component.literal("Vote failed ($yes-$no) - the run continues."),
+                false,
+            )
+            runManager.setState(RunState.RUN_ACTIVE)
+        }
     }
 }

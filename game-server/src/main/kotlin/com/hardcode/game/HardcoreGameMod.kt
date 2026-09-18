@@ -1,8 +1,13 @@
 package com.hardcode.game
 
+import com.hardcode.common.redis.RedisConnection
+import com.hardcode.common.redis.RedisEvent
+import com.hardcode.common.redis.RedisEventBus
+import com.hardcode.common.redis.RedisSchema
 import com.hardcode.common.storage.Database
 import com.hardcode.game.command.HardcoreCommands
 import com.hardcode.game.death.DeathHandler
+import com.hardcode.game.run.RerollCoordinator
 import com.hardcode.game.run.RunManager
 import com.hardcode.game.run.VoteManager
 import com.hardcode.game.storage.HallOfShame
@@ -17,11 +22,12 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Files
 
 /**
- * Entry point for the game-server mod. Phase 1: core run-lifecycle MVP - roster tracking,
- * death → mass spectator, chat-based vote, Hall of Shame writes, tab-list hearts.
+ * Entry point for the game-server mod. Phase 2: adds the world re-roll pipeline on top of
+ * Phase 1's run-lifecycle MVP - a passed vote now actually hands off to run-launcher (via
+ * Redis) and halts this process instead of just logging what would happen.
  *
- * World re-roll (Phase 2), the dedicated Limbo server hookup (Phase 3), freeze-on-disconnect
- * (Phase 4) and the admin panel (Phase 5) are not implemented yet - see the project plan.
+ * The dedicated Limbo server hookup (Phase 3), freeze-on-disconnect (Phase 4) and the admin
+ * panel (Phase 5) are not implemented yet - see the project plan.
  */
 object HardcoreGameMod : ModInitializer {
     private val logger = LoggerFactory.getLogger("hardcore-game")
@@ -37,9 +43,14 @@ object HardcoreGameMod : ModInitializer {
 
     private lateinit var hallOfShame: HallOfShame
     private var database: Database? = null
+    private var redis: RedisEventBus? = null
 
     override fun onInitialize() {
         logger.info("Hardcore Game Server mod initializing")
+
+        redis = runCatching { RedisEventBus(RedisConnection.fromEnv()) }
+            .onFailure { logger.warn("Could not set up Redis client, reroll hand-off will be disabled: {}", it.message) }
+            .getOrNull()
 
         ServerLifecycleEvents.SERVER_STARTING.register { server ->
             val dataDir = FabricLoader.getInstance().gameDir.resolve("hardcore")
@@ -50,19 +61,33 @@ object HardcoreGameMod : ModInitializer {
             hallOfShame = HallOfShame(db)
 
             runManager = RunManager()
-            hallOfShame.ensureRun(runManager.runId, runManager.seed, System.currentTimeMillis())
-            logger.info("Started run {} (seed {})", runManager.runId, runManager.seed)
+            logger.info("Starting run {}", runManager.runId)
 
-            voteManager = VoteManager(server, runManager)
+            val rerollCoordinator = RerollCoordinator(server, runManager, redis)
+            voteManager = VoteManager(server, runManager, rerollCoordinator)
             DeathHandler(server, runManager, voteManager, hallOfShame).register()
         }
 
-        // Not SERVER_STARTING: PlayerList doesn't exist yet at that point (confirmed by
-        // running the dev server - it NPEs inside ServerScoreboard.setDisplayObjective,
-        // which reaches into getPlayerList().getPlayers()). SERVER_STARTED fires once the
-        // server (and PlayerList) is fully up.
+        // Not SERVER_STARTING: PlayerList/the overworld don't exist yet at that point
+        // (confirmed by running the dev server - HealthTabList.install() NPE'd reaching into
+        // getPlayerList().getPlayers()). SERVER_STARTED fires once the server, its world and
+        // PlayerList are all fully up.
         ServerLifecycleEvents.SERVER_STARTED.register { server ->
+            runManager.confirmSeed(server.overworld().getSeed())
+            hallOfShame.ensureRun(runManager.runId, runManager.seed, System.currentTimeMillis())
+            logger.info("Run {} ready (seed {})", runManager.runId, runManager.seed)
+
             HealthTabList.install(server)
+
+            redis?.let { bus ->
+                runCatching {
+                    bus.publish(
+                        RedisSchema.Channels.REROLL_READY,
+                        RedisEvent.RerollReady.serializer(),
+                        RedisEvent.RerollReady(runManager.runId),
+                    )
+                }.onFailure { logger.warn("Failed to publish reroll-ready: {}", it.message) }
+            }
         }
 
         ServerPlayConnectionEvents.JOIN.register { handler, _, _ ->
@@ -89,6 +114,8 @@ object HardcoreGameMod : ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPING.register {
             database?.close()
             database = null
+            redis?.close()
+            redis = null
         }
     }
 }

@@ -7,16 +7,24 @@ import java.util.UUID
 import kotlin.random.Random
 
 /**
- * Owns the current run's lifecycle state and roster. Phase 1: single world, no reroll -
- * [runId]/[seed] are generated once at server start and don't change yet (that's Phase 2,
- * which is also when this starts mirroring to Redis for the proxy/limbo/run-launcher to
- * read - no point wiring that up before anything consumes it).
+ * Owns the current run's lifecycle state and roster.
+ *
+ * [runId] normally starts as a fresh random UUID, but when run-launcher relaunches the game
+ * server after a reroll (Phase 2), it sets the `HARDCODE_RUN_ID` env var to the run id that
+ * was already announced (Hall of Shame rows, chat messages, etc. before the restart) so this
+ * process picks up the *same* id instead of minting a second one for what is really one run.
+ *
+ * [seed] starts as a random placeholder too, but is corrected to the real generated world
+ * seed once the world exists (see [confirmSeed]) - run-launcher controls the actual seed via
+ * `level-seed` in server.properties, not via anything this class generates.
  */
-class RunManager {
+class RunManager(runIdOverride: String? = System.getenv("HARDCODE_RUN_ID")) {
     private val logger = LoggerFactory.getLogger("hardcore-game")
 
-    val runId: String = UUID.randomUUID().toString()
-    val seed: Long = Random.nextLong()
+    val runId: String = runIdOverride ?: UUID.randomUUID().toString()
+
+    var seed: Long = Random.nextLong()
+        private set
 
     var state: RunState = RunState.RUN_ACTIVE
         private set
@@ -47,5 +55,10 @@ class RunManager {
 
     fun setState(newState: RunState) {
         state = newState
+    }
+
+    /** Called once the overworld exists, so logs/Hall of Shame reflect the real world seed. */
+    fun confirmSeed(actualSeed: Long) {
+        seed = actualSeed
     }
 }
