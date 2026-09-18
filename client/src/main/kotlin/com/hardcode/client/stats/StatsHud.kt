@@ -10,10 +10,11 @@ import kotlin.math.sqrt
 /**
  * Keybind-toggled statistics overlay: each teammate's health/food/armor plus a direction
  * relative to where the local player is currently facing, computed client-side from the
- * server's periodic [com.hardcode.common.model.StatsSnapshot] broadcasts. Text-based rather
- * than icon sprites/rotated arrow graphics for now (no asset pipeline set up yet, and this
- * avoids depending on unverified glyph rendering) - see the project plan section 9 for the
- * fuller vision this is a stand-in for.
+ * server's periodic [com.hardcode.common.model.StatsSnapshot] broadcasts. Direction is an
+ * 8-way Unicode arrow glyph (U+2190-U+2199, the basic Arrows block, which Minecraft's font
+ * renders directly rather than falling back to a missing-glyph box) rather than a rotated
+ * arrow graphic or icon sprites - no asset pipeline set up yet - see the project plan
+ * section 9 for the fuller vision this is a stand-in for.
  */
 object StatsHud {
     private const val PANEL_BG_ARGB = 0xA0101018.toInt()
@@ -42,7 +43,7 @@ object StatsHud {
             val direction = relativeDirectionLabel(dx, dz, self.getYRot())
 
             val line = "${stat.name}  HP ${stat.health.toInt()}/${stat.maxHealth.toInt()}  " +
-                "Food ${stat.food}  Armor ${stat.armor}  [$direction ${distance}m]"
+                "Food ${stat.food}  Armor ${stat.armor}  $direction ${distance}m"
             val color = if (stat.health <= stat.maxHealth * 0.3f) CommonColors.RED else CommonColors.WHITE
             graphics.text(client.font, line, LEFT + 4, y, color)
             y += ROW_HEIGHT
@@ -56,14 +57,14 @@ object StatsHud {
         if (relative < 0) relative += 360.0
 
         return when {
-            relative < 22.5 || relative >= 337.5 -> "AHEAD"
-            relative < 67.5 -> "AHEAD-RIGHT"
-            relative < 112.5 -> "RIGHT"
-            relative < 157.5 -> "BEHIND-RIGHT"
-            relative < 202.5 -> "BEHIND"
-            relative < 247.5 -> "BEHIND-LEFT"
-            relative < 292.5 -> "LEFT"
-            else -> "AHEAD-LEFT"
+            relative < 22.5 || relative >= 337.5 -> "↑" // AHEAD ↑
+            relative < 67.5 -> "↗" // AHEAD-RIGHT ↗
+            relative < 112.5 -> "→" // RIGHT →
+            relative < 157.5 -> "↘" // BEHIND-RIGHT ↘
+            relative < 202.5 -> "↓" // BEHIND ↓
+            relative < 247.5 -> "↙" // BEHIND-LEFT ↙
+            relative < 292.5 -> "←" // LEFT ←
+            else -> "↖" // AHEAD-LEFT ↖
         }
     }
 }
