@@ -19,6 +19,9 @@ out/
 # Manual local playtest environment (real standalone Fabric servers, downloaded
 # vanilla/loader/mod jars, world saves) - see local-test/README.md
 /local-test/
+# Stray Fabric installer artifact left at the repo root if fabric-server-launch.jar is ever
+# accidentally invoked from here instead of a local-test/* directory.
+/fabric-server-launcher.properties
 
 # Logs / local config
 *.log
