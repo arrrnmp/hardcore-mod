@@ -9,12 +9,12 @@ build/
 .vscode/
 out/
 
-# Local dev run directories (Fabric/Velocity working dirs)
-run/
-runs/
-proxy/run/
-game-server/run/
-limbo-server/run/
+# Local dev run directories (Fabric/Velocity working dirs) - anchored to each module's root
+# (no bare "run/") since "run" is also a Kotlin source package (com.hardcode.game.run).
+/proxy/run/
+/game-server/run/
+/limbo-server/run/
+/runs/
 
 # Logs / local config
 *.log
