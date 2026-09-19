@@ -134,6 +134,27 @@ class AdminScreen(private var snapshot: AdminSnapshot) : Screen(Component.litera
                 )
             },
         )
+        val y2 = y + ROW_HEIGHT + 6
+        addRenderableWidget(
+            PanelButton(LEFT, y2, 50, 22, Component.literal("-1m")) {
+                sendAction(
+                    AdminAction(
+                        AdminActionType.UPDATE_CONFIG.name,
+                        maxFreezeMinutes = snapshot.maxFreezeMinutes - 1,
+                    ),
+                )
+            },
+        )
+        addRenderableWidget(
+            PanelButton(LEFT + 190, y2, 50, 22, Component.literal("+1m")) {
+                sendAction(
+                    AdminAction(
+                        AdminActionType.UPDATE_CONFIG.name,
+                        maxFreezeMinutes = snapshot.maxFreezeMinutes + 1,
+                    ),
+                )
+            },
+        )
     }
 
     private fun sendAction(action: AdminAction) {
@@ -183,6 +204,13 @@ class AdminScreen(private var snapshot: AdminSnapshot) : Screen(Component.litera
             }
             Tab.CONFIG -> {
                 graphics.text(font, "Vote duration: ${snapshot.voteDurationSeconds}s", LEFT + 60, y0 + 6, CommonColors.WHITE)
+                graphics.text(
+                    font,
+                    "Max freeze: ${snapshot.maxFreezeMinutes}m (0 = off)",
+                    LEFT + 60,
+                    y0 + 6 + ROW_HEIGHT + 6,
+                    CommonColors.WHITE,
+                )
             }
         }
 

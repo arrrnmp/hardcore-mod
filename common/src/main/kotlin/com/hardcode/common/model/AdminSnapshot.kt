@@ -17,6 +17,7 @@ data class AdminSnapshot(
     val roster: List<RosterEntry>,
     val leaderboard: List<LeaderboardEntry>,
     val voteDurationSeconds: Int,
+    val maxFreezeMinutes: Int = 15,
 )
 
 @Serializable
@@ -34,6 +35,7 @@ data class AdminAction(
     val type: String,
     val targetUuid: String? = null,
     val voteDurationSeconds: Int? = null,
+    val maxFreezeMinutes: Int? = null,
 )
 
 enum class AdminActionType {

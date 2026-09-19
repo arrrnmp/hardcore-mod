@@ -23,11 +23,33 @@ data class LauncherConfig(
         /** Launch-command entries are `||`-delimited since paths/args may contain spaces. */
         private const val COMMAND_DELIMITER = "||"
 
-        fun fromEnv(): LauncherConfig {
-            val launchWorkingDir = Paths.get(System.getenv("HARDCODE_LAUNCH_WORKING_DIR") ?: ".").toAbsolutePath()
-            val serverDir = System.getenv("HARDCODE_SERVER_DIR")
-                ?.let { Paths.get(it).toAbsolutePath() }
-                ?: launchWorkingDir
+        const val MC_VERSION_ENV = "HARDCODE_MC_VERSION"
+
+        /** MC targets this repo can build (see each Fabric module's `-PmcVersion`). */
+        val SUPPORTED_MC_VERSIONS = setOf("26.3", "26.2", "26.1.2")
+
+        const val DEFAULT_MC_VERSION = "26.3"
+
+        /** Versioned game-server profile dir()['name'] under the local-test tree. */
+        fun profileDirName(mcVersion: String) = "game-$mcVersion"
+
+        fun fromEnv(mcVersion: String = DEFAULT_MC_VERSION): LauncherConfig {
+            require(mcVersion in SUPPORTED_MC_VERSIONS) {
+                "Unsupported MC version '$mcVersion' (supported: ${SUPPORTED_MC_VERSIONS.sorted()})"
+            }
+            // Pinned single-version deployments set HARDCODE_SERVER_DIR outright; otherwise the
+            // server dir is the version profile (game-<mcVersion>) resolved against the working dir,
+            // so one launcher checkout can supervise any locally installed version. The supervised
+            // process always runs inside the server dir unless HARDCODE_LAUNCH_WORKING_DIR says
+            // otherwise - server files (server.properties, world) resolve relative to it.
+            val explicitServerDir = System.getenv("HARDCODE_SERVER_DIR")
+            val serverDir = explicitServerDir
+                ?.let { Paths.get(it).toAbsolutePath().normalize() }
+                ?: Paths.get(System.getenv("HARDCODE_LAUNCH_WORKING_DIR") ?: ".").toAbsolutePath().normalize()
+                    .resolve(profileDirName(mcVersion))
+            val launchWorkingDir = System.getenv("HARDCODE_LAUNCH_WORKING_DIR")
+                ?.let { Paths.get(it).toAbsolutePath().normalize() }
+                ?: serverDir
 
             val defaultCommand = listOf(
                 launchWorkingDir.resolve(if (isWindows()) "gradlew.bat" else "gradlew").toString(),

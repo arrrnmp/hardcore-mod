@@ -1,33 +1,85 @@
+# ──────────────────────────────────────────────────────────────────────────────
 # Gradle
+# ──────────────────────────────────────────────────────────────────────────────
 .gradle/
 build/
+# Keep the wrapper jar so the project can be built without a pre-installed Gradle
 !gradle/wrapper/gradle-wrapper.jar
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Kotlin compiler / daemon caches
+# ──────────────────────────────────────────────────────────────────────────────
+.kotlin/
+
+# ──────────────────────────────────────────────────────────────────────────────
 # IDE
+# ──────────────────────────────────────────────────────────────────────────────
+# IntelliJ IDEA
 .idea/
 *.iml
+# VSCode
 .vscode/
+# Eclipse
 out/
+bin/
+*.class
 
-# Local dev run directories (Fabric/Velocity working dirs) - anchored to each module's root
-# (no bare "run/") since "run" is also a Kotlin source package (com.hardcode.game.run).
+# ──────────────────────────────────────────────────────────────────────────────
+# Fabric Loom / Minecraft toolchain
+# ──────────────────────────────────────────────────────────────────────────────
+# Loom caches (per-project) - generated on first build, never need committing
+**/remappedSources/
+**/.loom/
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Local dev run directories (Fabric/Velocity working dirs)
+# ──────────────────────────────────────────────────────────────────────────────
+# NOTE: bare "run/" is intentionally omitted - "run" is also a Kotlin source
+# package (com.hardcode.game.run). Each server module's run dir is anchored.
 /proxy/run/
 /game-server/run/
 /limbo-server/run/
 /runs/
 
-# Manual local playtest environment (real standalone Fabric servers, downloaded
-# vanilla/loader/mod jars, world saves) - see local-test/README.md
+# ──────────────────────────────────────────────────────────────────────────────
+# Loose mod/dependency jars dropped at the repo root
+# ──────────────────────────────────────────────────────────────────────────────
+# Downloaded third-party mod jars (Incendium, Terralith, Lithostitched, Tectonic,
+# tru.e-ending, etc.) used by local-test servers. Never belong in source control.
+/*.jar
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Manual local playtest environment
+# ──────────────────────────────────────────────────────────────────────────────
+# Real standalone Fabric servers, downloaded vanilla/loader/mod jars, world saves.
+# See local-test/README.md if it exists.
 /local-test/
-# Stray Fabric installer artifact left at the repo root if fabric-server-launch.jar is ever
-# accidentally invoked from here instead of a local-test/* directory.
+# Stray Fabric installer artifact left at the repo root if fabric-server-launch.jar
+# is ever accidentally invoked from here instead of a local-test/* directory.
 /fabric-server-launcher.properties
 
-# Logs / local config
+# ──────────────────────────────────────────────────────────────────────────────
+# Logs / sensitive local config
+# ──────────────────────────────────────────────────────────────────────────────
 *.log
+*.log.*
 .env
+.env.*
+!.env.example
 local.properties
 
-# OS
+# ──────────────────────────────────────────────────────────────────────────────
+# OS artefacts
+# ──────────────────────────────────────────────────────────────────────────────
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+# Windows
 Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+# Linux
+*~

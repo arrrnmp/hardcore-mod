@@ -11,10 +11,23 @@ java {
 
 val shade = configurations.create("shade")
 
+// Switchable Minecraft target: default 26.3 (gradle.properties `mcVersion`);
+// `-PmcVersion="26.2"` or `-PmcVersion="26.1.2"` (quotes required) builds against an
+// older MC for third-party mods not yet updated. fabricApiVersion follows automatically
+// unless overridden with -PfabricApiVersion.
+val mcVersion: String = providers.gradleProperty("mcVersion").getOrElse(libs.versions.minecraft.get())
+val fabricApiVersion: String = providers.gradleProperty("fabricApiVersion").getOrElse(
+    when (mcVersion) {
+        "26.2" -> libs.versions.fabricApi262.get()
+        "26.1.2" -> libs.versions.fabricApi2612.get()
+        else -> libs.versions.fabricApi.get()
+    }
+)
+
 dependencies {
-    minecraft("com.mojang:minecraft:${libs.versions.minecraft.get()}")
+    minecraft("com.mojang:minecraft:$mcVersion")
     implementation("net.fabricmc:fabric-loader:${libs.versions.fabricLoader.get()}")
-    implementation(libs.fabric.api)
+    implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
     implementation(libs.fabric.language.kotlin)
 
     // Client is intentionally the leanest jar in the suite - protocol DTOs only, no
@@ -36,7 +49,8 @@ tasks.build {
 
 tasks.processResources {
     inputs.property("version", project.version)
+    inputs.property("minecraft_version", mcVersion)
     filesMatching("fabric.mod.json") {
-        expand("version" to project.version)
+        expand("version" to project.version, "minecraft_version" to mcVersion)
     }
 }

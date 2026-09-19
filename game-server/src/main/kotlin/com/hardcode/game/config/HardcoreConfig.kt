@@ -16,6 +16,8 @@ import java.nio.file.Path
 data class HardcoreConfig(
     val voteDurationSeconds: Int = 60,
     val deathTitleTemplate: String = "%player% HAS FALLEN",
+    /** Auto force-unfreeze after this many frozen minutes (0 disables). Survives restarts. */
+    val maxFreezeMinutes: Int = 15,
 )
 
 /** Loads/saves [HardcoreConfig] and hot-reloads it for anything reading [config] live. */

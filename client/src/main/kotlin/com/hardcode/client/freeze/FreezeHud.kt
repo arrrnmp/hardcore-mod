@@ -22,11 +22,20 @@ object FreezeHud {
         graphics.fill(0, 0, graphics.guiWidth(), BANNER_HEIGHT, BANNER_BG_ARGB)
 
         val waitingFor = FreezeClientState.waitingForPlayerName
+        val timer = elapsedSuffix()
         val message = if (waitingFor.isEmpty()) {
-            "Run frozen"
+            "Run frozen$timer"
         } else {
-            "Run frozen - waiting for $waitingFor to reconnect"
+            "Run frozen - waiting for $waitingFor to reconnect$timer"
         }
         graphics.centeredText(Minecraft.getInstance().font, message, graphics.guiWidth() / 2, 8, CommonColors.WHITE)
+    }
+
+    /** Live " · mm:ss" freeze timer; empty when the server didn't send a start timestamp. */
+    private fun elapsedSuffix(): String {
+        val since = FreezeClientState.frozenSinceEpochMs
+        if (since <= 0) return ""
+        val seconds = ((System.currentTimeMillis() - since).coerceAtLeast(0) / 1000)
+        return " · ${seconds / 60}:${"%02d".format(seconds % 60)}"
     }
 }

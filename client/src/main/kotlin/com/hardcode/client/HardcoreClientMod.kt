@@ -8,6 +8,7 @@ import com.hardcode.client.death.DeathFlashPayload
 import com.hardcode.client.death.DeathFlashState
 import com.hardcode.client.freeze.FreezeClientState
 import com.hardcode.client.freeze.FreezeHud
+import com.hardcode.client.freeze.FreezeInputLock
 import com.hardcode.client.freeze.FreezeStatePayload
 import com.hardcode.client.stats.StatsClientState
 import com.hardcode.client.stats.StatsHud
@@ -24,6 +25,8 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry
 import net.minecraft.resources.Identifier
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.Screen
 import org.slf4j.LoggerFactory
 
 /**
@@ -53,7 +56,7 @@ object HardcoreClientMod : ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(AdminSnapshotPayload.TYPE) { payload, context ->
             val snapshot = runCatching { json.decodeFromString<AdminSnapshot>(payload.snapshotJson) }.getOrNull() ?: return@registerGlobalReceiver
-            val currentScreen = context.client().gui.screen()
+            val currentScreen = currentScreen(context.client())
             if (currentScreen is AdminScreen) {
                 currentScreen.updateSnapshot(snapshot)
             } else {
@@ -77,9 +80,24 @@ object HardcoreClientMod : ClientModInitializer {
         }
 
         StatsKeybind.register()
+        FreezeInputLock.register()
 
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("hardcode", "freeze_hud"), FreezeHud::extractRenderState)
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("hardcode", "death_flash_hud"), DeathFlashHud::extractRenderState)
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("hardcode", "stats_hud"), StatsHud::extractRenderState)
+    }
+
+    /**
+     * Current screen across MC targets: 26.2+ exposes it as `Gui.screen()`, while 26.1.x
+     * only has the public `Minecraft.screen` field - neither exists on the other version,
+     * so this resolves it reflectively instead of branching source sets for one call.
+     */
+    private fun currentScreen(client: Minecraft): Screen? {
+        runCatching {
+            client.gui.javaClass.getMethod("screen").invoke(client.gui) as? Screen
+        }.getOrNull()?.let { return it }
+        return runCatching {
+            client.javaClass.getField("screen").get(client) as? Screen
+        }.getOrNull()
     }
 }

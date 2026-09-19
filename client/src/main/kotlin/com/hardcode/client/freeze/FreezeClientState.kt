@@ -8,8 +8,12 @@ object FreezeClientState {
     @Volatile
     var waitingForPlayerName: String = ""
 
+    @Volatile
+    var frozenSinceEpochMs: Long = 0
+
     fun update(payload: FreezeStatePayload) {
         frozen = payload.frozen
         waitingForPlayerName = payload.waitingForPlayerName
+        frozenSinceEpochMs = payload.frozenSinceEpochMs
     }
 }

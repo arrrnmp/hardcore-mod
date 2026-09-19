@@ -11,6 +11,11 @@
 minecraft = "26.3"
 fabricLoader = "0.19.5"
 fabricApi = "0.160.7+26.3"
+# Latest fabric-api for the 26.2 target (Modrinth, 2026-09-07). Used automatically
+# when -PmcVersion=26.2 is passed; override explicitly with -PfabricApiVersion=... .
+fabricApi262 = "0.160.0+26.2"
+# Latest fabric-api for the 26.1.2 target (Modrinth, 2026-09-07). Same mechanism.
+fabricApi2612 = "0.155.3+26.1.2"
 fabricLanguageKotlin = "1.14.1+kotlin.2.4.20"
 loom = "1.18.2"
 

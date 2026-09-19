@@ -6,7 +6,6 @@ import com.hardcode.common.model.AdminSnapshot
 import com.hardcode.common.model.LeaderboardEntry
 import com.hardcode.common.model.RosterEntry
 import com.hardcode.game.config.ConfigManager
-import com.hardcode.game.config.HardcoreConfig
 import com.hardcode.game.freeze.FreezeManager
 import com.hardcode.game.run.RerollCoordinator
 import com.hardcode.game.run.RunManager
@@ -58,7 +57,7 @@ class AdminService(
             AdminActionType.REQUEST_SNAPSHOT -> {}
             AdminActionType.FORCE_VOTE -> voteManager.startVote()
             AdminActionType.FORCE_FREEZE -> freezeManager.setAdminForced(true)
-            AdminActionType.FORCE_UNFREEZE -> freezeManager.setAdminForced(false)
+            AdminActionType.FORCE_UNFREEZE -> freezeManager.forceUnfreeze()
             AdminActionType.FORCE_REROLL -> {
                 server.playerList.broadcastSystemMessage(
                     Component.literal("An operator forced a re-roll."),
@@ -69,8 +68,16 @@ class AdminService(
                 rerollCoordinator.requestReroll(runManager.rosterSnapshot())
             }
             AdminActionType.KICK_PLAYER -> action.targetUuid?.let { kickPlayer(UUID.fromString(it)) }
-            AdminActionType.UPDATE_CONFIG -> action.voteDurationSeconds?.let {
-                configManager.update(HardcoreConfig(voteDurationSeconds = it.coerceIn(10, 600)))
+            AdminActionType.UPDATE_CONFIG -> {
+                val current = configManager.config
+                configManager.update(
+                    current.copy(
+                        voteDurationSeconds = action.voteDurationSeconds?.coerceIn(10, 600)
+                            ?: current.voteDurationSeconds,
+                        maxFreezeMinutes = action.maxFreezeMinutes?.coerceAtLeast(0)
+                            ?: current.maxFreezeMinutes,
+                    ),
+                )
             }
             null -> logger.warn("Unknown admin action type: {}", action.type)
         }
@@ -113,6 +120,7 @@ class AdminService(
             roster = roster,
             leaderboard = leaderboard,
             voteDurationSeconds = configManager.config.voteDurationSeconds,
+            maxFreezeMinutes = configManager.config.maxFreezeMinutes,
         )
     }
 }

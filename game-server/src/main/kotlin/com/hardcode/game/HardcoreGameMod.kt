@@ -91,7 +91,7 @@ object HardcoreGameMod : ModInitializer {
             val rerollCoordinator = RerollCoordinator(server, runManager, redis)
             voteManager = VoteManager(server, runManager, rerollCoordinator, configManager)
             DeathHandler(server, runManager, voteManager, hallOfShame, configManager).register()
-            freezeManager = FreezeManager(server, runManager, redis)
+            freezeManager = FreezeManager(server, runManager, redis, configManager)
             freezeManager.registerEnforcement()
             statsBroadcaster = StatsBroadcaster(server, runManager)
             adminService = AdminService(

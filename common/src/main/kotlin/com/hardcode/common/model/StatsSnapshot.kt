@@ -18,6 +18,15 @@ data class PlayerStat(
     val y: Double,
     val z: Double,
     val dimension: String,
+    // Air supply for the drowning indicator - defaulted (rather than required) so a payload
+    // from a build that doesn't send it yet still decodes instead of dropping the snapshot.
+    val air: Int = 300,
+    val maxAir: Int = 300,
+    // Experience + absorption for the sprite overlay - defaulted like air so older
+    // payloads still decode instead of dropping the snapshot.
+    val expProgress: Float = 0f,
+    val expLevel: Int = 0,
+    val absorption: Float = 0f,
 )
 
 @Serializable

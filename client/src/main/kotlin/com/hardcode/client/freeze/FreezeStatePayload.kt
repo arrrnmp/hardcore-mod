@@ -12,7 +12,11 @@ import net.minecraft.resources.Identifier
  * channel id and field layout in sync by hand (see that file's doc comment for why this
  * isn't pulled into a shared module).
  */
-data class FreezeStatePayload(val frozen: Boolean, val waitingForPlayerName: String) : CustomPacketPayload {
+data class FreezeStatePayload(
+    val frozen: Boolean,
+    val waitingForPlayerName: String,
+    val frozenSinceEpochMs: Long = 0,
+) : CustomPacketPayload {
     override fun type() = TYPE
 
     companion object {
@@ -24,6 +28,8 @@ data class FreezeStatePayload(val frozen: Boolean, val waitingForPlayerName: Str
             FreezeStatePayload::frozen,
             ByteBufCodecs.STRING_UTF8,
             FreezeStatePayload::waitingForPlayerName,
+            ByteBufCodecs.VAR_LONG,
+            FreezeStatePayload::frozenSinceEpochMs,
             ::FreezeStatePayload,
         )
     }

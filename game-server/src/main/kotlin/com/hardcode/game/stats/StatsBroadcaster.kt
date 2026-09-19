@@ -39,6 +39,11 @@ class StatsBroadcaster(
                 y = player.getY(),
                 z = player.getZ(),
                 dimension = player.level().dimension().identifier().toString(),
+                air = player.getAirSupply(),
+                maxAir = player.getMaxAirSupply(),
+                expProgress = player.experienceProgress,
+                expLevel = player.experienceLevel,
+                absorption = player.getAbsorptionAmount(),
             )
         }
 
