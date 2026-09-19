@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "hardcore-game",
+  "id": "aaronmompie-game",
   "name": "Hardcore Game Server",
   "version": "${version}",
   "description": "Run lifecycle, mass-spectator-on-death, freeze-on-disconnect and Hall of Shame logic for the game server.",
@@ -8,7 +8,7 @@
   "environment": "server",
   "entrypoints": {
     "main": [
-      { "adapter": "kotlin", "value": "com.hardcode.game.HardcoreGameMod" }
+      { "adapter": "kotlin", "value": "com.aaronmompie.game.HardcoreGameMod" }
     ]
   },
   "depends": {

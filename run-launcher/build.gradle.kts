@@ -16,7 +16,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("com.hardcode.launcher.MainKt")
+    mainClass.set("com.aaronmompie.launcher.MainKt")
 }
 
 tasks.shadowJar {

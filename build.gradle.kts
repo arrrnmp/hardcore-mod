@@ -6,7 +6,7 @@ plugins {
 }
 
 allprojects {
-    group = "com.hardcode"
+    group = "com.aaronmompie"
     version = "0.1.0-SNAPSHOT"
 
     repositories {

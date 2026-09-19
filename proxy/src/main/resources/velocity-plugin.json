@@ -1,9 +1,9 @@
 {
-  "id": "hardcore-proxy",
+  "id": "aaronmompie-proxy",
   "name": "Hardcore Proxy",
   "version": "0.1.0-SNAPSHOT",
   "description": "Routes players between the Limbo and Game servers based on run/freeze state.",
   "authors": [],
   "dependencies": [],
-  "main": "com.hardcode.proxy.HardcoreProxyPlugin"
+  "main": "com.aaronmompie.proxy.HardcoreProxyPlugin"
 }

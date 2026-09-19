@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "hardcore-limbo",
+  "id": "aaronmompie-limbo",
   "name": "Hardcore Limbo Server",
   "version": "${version}",
   "description": "The End-like waiting dimension players sit in between runs.",
@@ -8,7 +8,7 @@
   "environment": "server",
   "entrypoints": {
     "main": [
-      { "adapter": "kotlin", "value": "com.hardcode.limbo.HardcoreLimboMod" }
+      { "adapter": "kotlin", "value": "com.aaronmompie.limbo.HardcoreLimboMod" }
     ]
   },
   "depends": {

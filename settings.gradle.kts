@@ -15,7 +15,7 @@ pluginManagement {
 // Loom entirely. Shared repos are declared the normal (default PREFER_PROJECT) way instead,
 // via `allprojects { repositories { ... } }` in the root build.gradle.kts.
 
-rootProject.name = "hardcode-mod"
+rootProject.name = "aaronmompie-mod"
 
 include("common")
 include("common-redis")
